@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Organ Pointer</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: rgba(20, 24, 34, 0.78);
+    --accent: #8be9fd;
+    --accent-2: #ff79c6;
+    --text: #f8f8f2;
+    --muted: #a0a8b8;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+  #stage {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+  }
+  #video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  #video.mirrored { transform: scaleX(-1); }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  #header {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 5;
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    padding: 10px 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  #header h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  #header p {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  #status {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    z-index: 5;
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    border-radius: 10px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+    max-width: 70%;
+  }
+  #organ-card {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 5;
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    border-radius: 14px;
+    padding: 14px 18px;
+    border: 1px solid rgba(255,255,255,0.08);
+    min-width: 220px;
+    text-align: right;
+  }
+  #organ-card .label {
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  #organ-card .name {
+    font-size: 26px;
+    font-weight: 700;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-top: 4px;
+    line-height: 1.1;
+  }
+  #organ-card .desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  #start-btn {
+    position: absolute;
+    z-index: 10;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border: none;
+    color: #0b0d12;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 16px 32px;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 10px 30px rgba(139, 233, 253, 0.25);
+  }
+  #start-btn:hover { transform: translateY(-1px); }
+  #flip-btn {
+    position: absolute;
+    z-index: 6;
+    bottom: 16px;
+    right: 16px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    color: var(--text);
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #flip-btn:active { transform: scale(0.95); }
+  .hidden { display: none !important; }
+
+  @media (max-width: 640px), (orientation: portrait) {
+    #header {
+      top: 10px;
+      left: 10px;
+      padding: 8px 10px;
+      max-width: 60%;
+    }
+    #header h1 { font-size: 14px; }
+    #header p { font-size: 11px; }
+    #organ-card {
+      top: auto;
+      bottom: 84px;
+      left: 10px;
+      right: 10px;
+      min-width: 0;
+      text-align: center;
+      padding: 12px 14px;
+    }
+    #organ-card .name { font-size: 22px; }
+    #status {
+      bottom: 10px;
+      left: 10px;
+      right: 78px;
+      max-width: none;
+      font-size: 11px;
+    }
+    #flip-btn {
+      bottom: 10px;
+      right: 10px;
+      width: 56px;
+      height: 56px;
+    }
+    #start-btn { font-size: 16px; padding: 14px 26px; }
+  }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <video id="video" class="mirrored" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+    <button id="start-btn">Start camera</button>
+    <button id="flip-btn" class="hidden" title="Switch camera" aria-label="Switch camera">⟳</button>
+    <div id="header">
+      <h1>Organ Pointer</h1>
+      <p>Stand in front of the camera and point at yourself.</p>
+    </div>
+    <div id="organ-card">
+      <div class="label">Pointing at</div>
+      <div class="name" id="organ-name">—</div>
+      <div class="desc" id="organ-desc">Waiting for a pointing gesture…</div>
+    </div>
+    <div id="status">Idle.</div>
+  </div>
+
+<script type="module">
+import {
+  FilesetResolver,
+  PoseLandmarker,
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const video = document.getElementById("video");
+const overlay = document.getElementById("overlay");
+const ctx = overlay.getContext("2d");
+const statusEl = document.getElementById("status");
+const organName = document.getElementById("organ-name");
+const organDesc = document.getElementById("organ-desc");
+const startBtn = document.getElementById("start-btn");
+const flipBtn = document.getElementById("flip-btn");
+
+let landmarker = null;
+let running = false;
+let lastVideoTime = -1;
+let currentFacing = "user";    // "user" = front camera, "environment" = rear
+let mirrored = true;            // mirror display only when using front camera
+
+const ORGANS = [
+  { name: "Brain",            u: 0.50, v: -0.65, r: 0.45, blurb: "Central nervous system HQ." },
+  { name: "Eyes",             u: 0.50, v: -0.48, r: 0.18, blurb: "Visual sensors." },
+  { name: "Mouth / Jaw",      u: 0.50, v: -0.35, r: 0.14, blurb: "Where chewing happens." },
+  { name: "Throat / Trachea", u: 0.50, v: -0.18, r: 0.14, blurb: "Air and food highway." },
+  { name: "Thyroid",          u: 0.50, v: -0.08, r: 0.10, blurb: "Hormones for metabolism." },
+  { name: "Heart",            u: 0.58, v:  0.18, r: 0.14, blurb: "Pumps blood. Slightly left of center." },
+  { name: "Right Lung",       u: 0.22, v:  0.15, r: 0.20, blurb: "Three lobes on this side." },
+  { name: "Left Lung",        u: 0.78, v:  0.15, r: 0.18, blurb: "Two lobes — makes room for heart." },
+  { name: "Liver",            u: 0.28, v:  0.42, r: 0.18, blurb: "Detox factory under the right ribs." },
+  { name: "Stomach",          u: 0.62, v:  0.42, r: 0.14, blurb: "Acid bath for food." },
+  { name: "Spleen",           u: 0.84, v:  0.42, r: 0.10, blurb: "Filters blood, recycles cells." },
+  { name: "Pancreas",         u: 0.50, v:  0.50, r: 0.10, blurb: "Insulin and digestive enzymes." },
+  { name: "Right Kidney",     u: 0.22, v:  0.55, r: 0.10, blurb: "Filters blood into urine." },
+  { name: "Left Kidney",      u: 0.78, v:  0.55, r: 0.10, blurb: "Filters blood into urine." },
+  { name: "Small Intestine",  u: 0.50, v:  0.72, r: 0.18, blurb: "Where most absorption happens." },
+  { name: "Appendix",         u: 0.32, v:  0.86, r: 0.07, blurb: "Vestigial-ish pouch off the colon." },
+  { name: "Large Intestine",  u: 0.50, v:  0.88, r: 0.22, blurb: "Water reclamation, waste shaping." },
+  { name: "Bladder",          u: 0.50, v:  1.02, r: 0.11, blurb: "Urine storage tank." },
+];
+
+// MediaPipe Pose landmark indices
+const L = {
+  NOSE: 0,
+  LEFT_SHOULDER: 11, RIGHT_SHOULDER: 12,
+  LEFT_ELBOW: 13,    RIGHT_ELBOW: 14,
+  LEFT_WRIST: 15,    RIGHT_WRIST: 16,
+  LEFT_INDEX: 19,    RIGHT_INDEX: 20,
+  LEFT_HIP: 23,      RIGHT_HIP: 24,
+};
+
+async function setupCamera(facing = currentFacing) {
+  if (video.srcObject) {
+    for (const t of video.srcObject.getTracks()) t.stop();
+    video.srcObject = null;
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: { ideal: facing },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+    audio: false,
+  });
+  video.srcObject = stream;
+  await new Promise((res) => (video.onloadedmetadata = res));
+  await video.play();
+
+  // Reflect the actual camera the browser gave us (it may not honor the hint).
+  const settings = stream.getVideoTracks()[0]?.getSettings?.() || {};
+  const actualFacing = settings.facingMode || facing;
+  currentFacing = actualFacing;
+  mirrored = actualFacing !== "environment";
+  video.classList.toggle("mirrored", mirrored);
+
+  resizeCanvas();
+}
+
+async function flipCamera() {
+  flipBtn.disabled = true;
+  const next = currentFacing === "environment" ? "user" : "environment";
+  try {
+    await setupCamera(next);
+    setStatus(`Switched to ${mirrored ? "front" : "rear"} camera.`);
+  } catch (err) {
+    console.error(err);
+    setStatus(`Couldn't switch camera: ${err.message}`);
+    // Try to restore previous camera
+    try { await setupCamera(currentFacing); } catch {}
+  } finally {
+    flipBtn.disabled = false;
+  }
+}
+
+function resizeCanvas() {
+  overlay.width = video.videoWidth || overlay.clientWidth;
+  overlay.height = video.videoHeight || overlay.clientHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+
+async function loadModel() {
+  setStatus("Loading pose model…");
+  const fileset = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  landmarker = await PoseLandmarker.createFromOptions(fileset, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+      delegate: "GPU",
+    },
+    runningMode: "VIDEO",
+    numPoses: 1,
+  });
+}
+
+function setStatus(text) { statusEl.textContent = text; }
+
+// Project a point onto the torso reference frame.
+// Origin = midpoint of shoulders.
+// X-axis = right_shoulder -> left_shoulder (so u=0 at right shoulder, u=1 at left shoulder).
+// Y-axis = shoulder_mid -> hip_mid (v=0 at shoulders, v=1 at hips).
+// All inputs are normalized landmark coords (0..1 within image).
+function buildTorsoFrame(lm) {
+  const rs = lm[L.RIGHT_SHOULDER], ls = lm[L.LEFT_SHOULDER];
+  const rh = lm[L.RIGHT_HIP],      lh = lm[L.LEFT_HIP];
+  const sMid = { x: (rs.x + ls.x) / 2, y: (rs.y + ls.y) / 2 };
+  const hMid = { x: (rh.x + lh.x) / 2, y: (rh.y + lh.y) / 2 };
+  const xAxis = { x: ls.x - rs.x, y: ls.y - rs.y };          // shoulder span vector
+  const yAxis = { x: hMid.x - sMid.x, y: hMid.y - sMid.y };  // torso vertical vector
+  const xLen2 = xAxis.x * xAxis.x + xAxis.y * xAxis.y;
+  const yLen2 = yAxis.x * yAxis.x + yAxis.y * yAxis.y;
+  return { sMid, hMid, xAxis, yAxis, xLen2, yLen2, rs, ls, rh, lh };
+}
+
+function projectToTorso(p, frame) {
+  const dx = p.x - frame.sMid.x;
+  const dy = p.y - frame.sMid.y;
+  const u = (dx * frame.xAxis.x + dy * frame.xAxis.y) / frame.xLen2 + 0.5;
+  const v = (dx * frame.yAxis.x + dy * frame.yAxis.y) / frame.yLen2;
+  return { u, v };
+}
+
+function pickPointingHand(lm, frame) {
+  // The hand we treat as "pointing" is whichever index fingertip is closer
+  // to the torso (smaller distance from shoulder midpoint, in torso units).
+  const candidates = [
+    { side: "left",  index: lm[L.LEFT_INDEX],  wrist: lm[L.LEFT_WRIST],  shoulder: lm[L.LEFT_SHOULDER]  },
+    { side: "right", index: lm[L.RIGHT_INDEX], wrist: lm[L.RIGHT_WRIST], shoulder: lm[L.RIGHT_SHOULDER] },
+  ];
+  let best = null;
+  for (const c of candidates) {
+    if (!c.index || c.index.visibility < 0.4) continue;
+    const torsoCoords = projectToTorso(c.index, frame);
+    // Score: closer to torso center (low |u-0.5|) and within the body's vertical extent is better.
+    const horiz = Math.abs(torsoCoords.u - 0.5);
+    const vert = Math.max(0, Math.min(1.2, torsoCoords.v));
+    const score = horiz + 0.3 * Math.abs(vert - 0.5);
+    if (!best || score < best.score) {
+      best = { ...c, torso: torsoCoords, score };
+    }
+  }
+  return best;
+}
+
+function nearestOrgan(uv) {
+  let best = null;
+  for (const o of ORGANS) {
+    const du = uv.u - o.u;
+    const dv = uv.v - o.v;
+    const d = Math.sqrt(du * du + dv * dv);
+    const norm = d / o.r;
+    if (!best || norm < best.norm) best = { organ: o, norm, d };
+  }
+  return best;
+}
+
+// Convert a normalized landmark x to canvas x. Video is CSS-mirrored, so
+// landmark x (anatomical) needs to be flipped to match the displayed video.
+function lx(x) { return (mirrored ? 1 - x : x) * overlay.width; }
+function ly(y) { return y * overlay.height; }
+
+function drawScene(lm, hand, organHit) {
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+  // Torso outline
+  const corners = [L.LEFT_SHOULDER, L.RIGHT_SHOULDER, L.RIGHT_HIP, L.LEFT_HIP];
+  ctx.beginPath();
+  corners.forEach((idx, i) => {
+    const p = lm[idx];
+    const x = lx(p.x), y = ly(p.y);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+  ctx.strokeStyle = "rgba(139,233,253,0.55)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 6]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Pointing arm
+  if (hand) {
+    const shoulder = hand.shoulder, wrist = hand.wrist, idx = hand.index;
+    ctx.beginPath();
+    ctx.moveTo(lx(shoulder.x), ly(shoulder.y));
+    ctx.lineTo(lx(wrist.x),    ly(wrist.y));
+    ctx.lineTo(lx(idx.x),      ly(idx.y));
+    ctx.strokeStyle = "rgba(255,121,198,0.9)";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    // Fingertip dot
+    ctx.beginPath();
+    ctx.arc(lx(idx.x), ly(idx.y), 9, 0, Math.PI * 2);
+    ctx.fillStyle = "#ff79c6";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.8)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Organ name floating near the fingertip
+  if (hand && organHit) {
+    const tipX = lx(hand.index.x);
+    const tipY = ly(hand.index.y);
+    const text = organHit.organ.name;
+    ctx.font = "bold 20px -apple-system, Segoe UI, sans-serif";
+    const w = ctx.measureText(text).width;
+    const padX = 12, padY = 8;
+    const boxX = tipX + 18;
+    const boxY = tipY - 16 - padY * 2;
+    ctx.fillStyle = "rgba(11,13,18,0.85)";
+    ctx.strokeStyle = "rgba(139,233,253,0.6)";
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, boxX, boxY, w + padX * 2, 24 + padY, 10);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#f8f8f2";
+    ctx.fillText(text, boxX + padX, boxY + padY + 18);
+  }
+}
+
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y,     x + w, y + h, r);
+  c.arcTo(x + w, y + h, x,     y + h, r);
+  c.arcTo(x,     y + h, x,     y,     r);
+  c.arcTo(x,     y,     x + w, y,     r);
+  c.closePath();
+}
+
+function loop() {
+  if (!running) return;
+  if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    const result = landmarker.detectForVideo(video, performance.now());
+    if (result.landmarks && result.landmarks.length > 0) {
+      const lm = result.landmarks[0];
+
+      const visible = (i) => lm[i] && lm[i].visibility > 0.5;
+      if (visible(L.LEFT_SHOULDER) && visible(L.RIGHT_SHOULDER) &&
+          visible(L.LEFT_HIP) && visible(L.RIGHT_HIP)) {
+        const frame = buildTorsoFrame(lm);
+        const hand = pickPointingHand(lm, frame);
+        let hit = null;
+        if (hand) {
+          hit = nearestOrgan(hand.torso);
+          organName.textContent = hit.organ.name;
+          const conf = Math.max(0, Math.min(1, 1 - hit.norm));
+          organDesc.textContent =
+            `${hit.organ.blurb}  ·  match ${(conf * 100).toFixed(0)}%`;
+          setStatus(`Tracking ${hand.side} hand · u=${hand.torso.u.toFixed(2)} v=${hand.torso.v.toFixed(2)}`);
+        } else {
+          organName.textContent = "—";
+          organDesc.textContent = "Hand not visible. Point at your body.";
+          setStatus("Pose detected, but no clear pointing hand.");
+        }
+        drawScene(lm, hand, hit);
+      } else {
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        organName.textContent = "—";
+        organDesc.textContent = "Step back so your torso is in frame.";
+        setStatus("Torso not fully visible.");
+      }
+    } else {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      organName.textContent = "—";
+      organDesc.textContent = "No person detected.";
+      setStatus("Looking for a person…");
+    }
+  }
+  requestAnimationFrame(loop);
+}
+
+startBtn.addEventListener("click", async () => {
+  startBtn.disabled = true;
+  startBtn.textContent = "Starting…";
+  try {
+    await setupCamera();
+    await loadModel();
+    running = true;
+    startBtn.classList.add("hidden");
+    flipBtn.classList.remove("hidden");
+    setStatus("Ready. Point at your body.");
+    requestAnimationFrame(loop);
+  } catch (err) {
+    console.error(err);
+    setStatus(`Error: ${err.message}`);
+    startBtn.disabled = false;
+    startBtn.textContent = "Try again";
+  }
+});
+
+flipBtn.addEventListener("click", flipCamera);
+</script>
+</body>
+</html>
