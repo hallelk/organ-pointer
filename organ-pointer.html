@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Organ Pointer</title>
 <style>
   :root {
@@ -70,7 +70,7 @@
   }
   #status {
     position: absolute;
-    bottom: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     left: 16px;
     z-index: 5;
     font-size: 12px;
@@ -133,8 +133,8 @@
   #flip-btn {
     position: absolute;
     z-index: 6;
-    bottom: 16px;
-    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    right: calc(16px + env(safe-area-inset-right, 0px));
     border-radius: 999px;
     border: 1px solid rgba(255,255,255,0.15);
     background: var(--panel);
@@ -166,7 +166,7 @@
     #header p { font-size: 11px; }
     #organ-card {
       top: auto;
-      bottom: 84px;
+      bottom: calc(84px + env(safe-area-inset-bottom, 0px));
       left: 10px;
       right: 10px;
       min-width: 0;
@@ -175,15 +175,15 @@
     }
     #organ-card .name { font-size: 22px; }
     #status {
-      bottom: 10px;
+      bottom: calc(10px + env(safe-area-inset-bottom, 0px));
       left: 10px;
       right: 78px;
       max-width: none;
       font-size: 11px;
     }
     #flip-btn {
-      bottom: 10px;
-      right: 10px;
+      bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+      right: calc(10px + env(safe-area-inset-right, 0px));
       padding: 10px 14px;
       font-size: 12px;
     }
@@ -196,7 +196,7 @@
     <video id="video" class="mirrored" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
     <button id="start-btn">Start camera</button>
-    <button id="flip-btn" class="hidden" title="Switch camera" aria-label="Switch camera">
+    <button id="flip-btn" title="Switch camera" aria-label="Switch camera">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 7h-3a2 2 0 0 1-2-2V2"/>
         <path d="M4 17v1a2 2 0 0 0 2 2h3"/>
@@ -303,13 +303,20 @@ async function setupCamera(facing = currentFacing) {
 async function flipCamera() {
   flipBtn.disabled = true;
   const next = currentFacing === "environment" ? "user" : "environment";
+  if (!running) {
+    // Camera not started yet — just save the preference and update label.
+    currentFacing = next;
+    mirrored = next !== "environment";
+    flipLabel.textContent = mirrored ? "Front" : "Rear";
+    flipBtn.disabled = false;
+    return;
+  }
   try {
     await setupCamera(next);
     setStatus(`Switched to ${mirrored ? "front (selfie)" : "rear"} camera.`);
   } catch (err) {
     console.error(err);
     setStatus(`Couldn't switch camera: ${err.message}`);
-    // Try to restore previous camera
     try { await setupCamera(currentFacing); } catch {}
   } finally {
     flipBtn.disabled = false;
@@ -526,7 +533,6 @@ startBtn.addEventListener("click", async () => {
     await loadModel();
     running = true;
     startBtn.classList.add("hidden");
-    flipBtn.classList.remove("hidden");
     setStatus("Ready. Point at your body.");
     requestAnimationFrame(loop);
   } catch (err) {
